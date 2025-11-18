@@ -10,10 +10,33 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1f0778ec-972c-44d7-9355-8cf9d23e7ef0" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.env.sample" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Cargo.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/components/NodeData.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/components/NodeData.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/Overseer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/Overseer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Worker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Worker.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../LICENSE" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../flow.svg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../grafana_dashboard.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../hivecore.webp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../run.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../setup_ollama.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/logging/error.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/logging/logger.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/logging/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/messages/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/messages/proxy_message.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/models/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/models/poller.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/models/tags.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/protocol/connection.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/protocol/docker.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/protocol/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/protocol/network_util.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/protocol/state.rs" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,6 +53,9 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
@@ -59,12 +85,14 @@
     &quot;Repository.Attach.Annotations&quot;: &quot;false&quot;,
     &quot;Repository.Attach.JavaDocs&quot;: &quot;false&quot;,
     &quot;Repository.Attach.Sources&quot;: &quot;false&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
     &quot;git-widget-placeholder&quot;: &quot;master&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/vake/IdeaProjects/FTP&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/hentailover/Documents/SluzbaFamnit/HiveCore&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -135,7 +163,6 @@
                 <option value="assembly:single" />
               </list>
             </option>
-            <option name="multimoduleDir" />
             <option name="pomFileName" value="pom.xml" />
             <option name="profilesMap">
               <map />
@@ -180,6 +207,12 @@
       <updated>1720092341759</updated>
       <workItem from="1759757107993" duration="4802000" />
       <workItem from="1763370035189" duration="3116000" />
+      <workItem from="1763378247095" duration="234000" />
+      <workItem from="1763379348783" duration="150000" />
+      <workItem from="1763379501131" duration="5508000" />
+      <workItem from="1763386947768" duration="522000" />
+      <workItem from="1763456614328" duration="3884000" />
+      <workItem from="1763460510882" duration="5852000" />
     </task>
     <servers />
   </component>

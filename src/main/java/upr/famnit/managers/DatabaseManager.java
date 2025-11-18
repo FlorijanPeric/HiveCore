@@ -124,6 +124,36 @@ public class DatabaseManager {
             }
         }
     }
+    /**
+     * Retrieves a {@link Key} from the {@code keys} table based on its Name.
+     *
+     * <p>This method searches for a key with the specified value and returns the corresponding
+     * {@link Key} object if found. If no matching key is found, it returns {@code null}.</p>
+     *
+     * @param name the value of the key to be retrieved
+     * @return the {@link Key} object if found; {@code null} otherwise
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
+    public static synchronized Key getKeyByName(String name) throws SQLException {
+        String sql = "SELECT * FROM keys WHERE name = ?";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, name);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                Key key = new Key(
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getString("value"),
+                        rs.getString("role")
+                );
+                Logger.info("Key retrieved: " + key.getName());
+                return key;
+            } else {
+                Logger.warn("No key found with name: " + name);
+                return null;
+            }
+        }
+    }
 
     /**
      * Retrieves all {@link Key} entries from the {@code keys} table.
@@ -152,4 +182,37 @@ public class DatabaseManager {
         }
         return keys;
     }
+
+
+    public static synchronized boolean deleteKeyByName(String name) throws SQLException {
+        String sql = "DELETE FROM keys WHERE name = ?";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, name);
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key deleted: " + name);
+                return true;
+            } else {
+                Logger.warn("No key found to delete with name: " + name);
+                return false;
+            }
+        }
+    }
+    public static synchronized boolean deleteKeyByValue(String value) throws SQLException{
+        String sql = "DELETE FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, value);
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key deleted: " + value);
+                return true;
+            } else {
+                Logger.warn("No key found to delete with name: " + value);
+                return false;
+            }
+        }
+    }
+
+
 }
+

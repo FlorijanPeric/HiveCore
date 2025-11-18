@@ -2,6 +2,8 @@ package upr.famnit.managers.connections;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import upr.famnit.authentication.*;
 import upr.famnit.components.*;
 import upr.famnit.managers.DatabaseManager;
@@ -9,6 +11,7 @@ import upr.famnit.managers.Overseer;
 import upr.famnit.util.Logger;
 import upr.famnit.util.StreamUtil;
 
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -108,6 +111,8 @@ public class Management implements Runnable {
 
         } catch (IOException e) {
             Logger.error("Error handling proxy management request: " + e.getMessage());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
         Logger.success("Management request finished");
     }
@@ -135,10 +140,11 @@ public class Management implements Runnable {
      *
      * @throws IOException if an I/O error occurs during response transmission
      */
-    private void handleKeyRoute() throws IOException {
+    private void handleKeyRoute() throws IOException, SQLException {
         switch (clientRequest.getRequest().getMethod()) {
             case "GET" -> handleListKeysRequest();
             case "POST" -> handleInsertKeyRequest();
+            case "DELETE"->handleDeleteKeyRequest();
             case null, default -> respond(ResponseFactory.NotFound());
         }
     }
@@ -325,6 +331,78 @@ public class Management implements Runnable {
 
         respond(ResponseFactory.Ok(validKey.getValue().getBytes(StandardCharsets.UTF_8)));
     }
+
+    /**
+     * Handles DELETE requests to delete a authentication key from the system if you are not trying.
+     * to delete ADMIN
+     * <p>This method performs the following actions:
+     * <ol>
+     *     <li>Parses the incoming JSON body to create a {@link SubmittedKey} object.</li>
+     *     <li>Converts the submitted key into a {@link Key} object.</li>
+     *     <li>Deletes the whole record with that key {@link DatabaseManager}.</li>
+     *     <li>Sends a successful response containing the key's value.</li>
+     * </ol>
+     * </p>
+     *
+     * @throws IOException if an I/O error occurs during request processing or response transmission
+     */
+    private void handleDeleteKeyRequest() throws IOException, SQLException {
+        Gson gson = new GsonBuilder().create();
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+
+        JsonObject jsonObject = JsonParser.parseString(body).getAsJsonObject();
+
+        String authValue = jsonObject.get("auth").getAsString();
+        Key requester = DatabaseManager.getKeyByValue(authValue);
+
+        if (requester == null || (requester.getRole())!=Role.Admin) {
+            respond(ResponseFactory.MethodNotAllowed());
+            return;
+        }
+
+        String value = jsonObject.has("value") ? jsonObject.get("value").getAsString().trim() : "";
+        String name = jsonObject.has("name") ? jsonObject.get("name").getAsString().trim() : "";
+        Key key = null;
+        boolean deleteByValue = false;
+
+
+        try {
+            if(!value.isEmpty()){
+                key=DatabaseManager.getKeyByValue(value);
+                deleteByValue=true;
+            }
+            if(key==null&&!name.isEmpty()) {
+                key = DatabaseManager.getKeyByName(name);
+            }
+
+            if (key != null) {
+                if(deleteByValue){
+                    boolean deleted=DatabaseManager.deleteKeyByValue(key.getValue());
+                }
+                else if (!deleteByValue&&key.getRole()!=Role.Admin) {
+                    // Key exists and is NOT Admin → delete it
+                    Logger.log(key.toString());
+                    boolean deleted = DatabaseManager.deleteKeyByName(key.getName());
+
+                    if (deleted) {
+                        System.out.println("Key deleted: " + key.getName());
+                    } else {
+                        System.out.println("Failed to delete key: " + key.getName());
+                    }
+                } else {
+                    // Admin key → do not delete
+                    System.out.println("Cannot delete Admin key: " + key.getName());
+                }
+            } else {
+                // Key does not exist
+                System.out.println("Key not found: " + name);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        respond(ResponseFactory.Ok(name.getBytes()));
+    }
+
 
     /**
      * Handles GET requests to list all authentication keys in the system.
