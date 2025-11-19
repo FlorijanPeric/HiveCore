@@ -10,6 +10,7 @@ package upr.famnit.authentication;
  *     <li>{@code Client}: Represents a standard client with limited access rights.</li>
  *     <li>{@code Worker}: Represents a worker entity with elevated permissions.</li>
  *     <li>{@code Admin}: Represents an administrator with full access rights.</li>
+ *     <li>{@code Researcher}: Represents an administrator with full access rights.</li>
  *     <li>{@code Unknown}: Represents an undefined or unrecognized role.</li>
  * </ul>
  * </p>
@@ -36,6 +37,11 @@ public enum Role {
     Admin,
 
     /**
+     * Represents a researcher with lower priority queing
+     */
+    Researcher,
+
+    /**
      * Represents an undefined or unrecognized role.
      */
     Unknown;
@@ -60,9 +66,21 @@ public enum Role {
             case Admin -> {
                 return "Admin";
             }
+            case Researcher ->{
+                return "Researcher";
+            }
             default -> {
                 return "Unknown";
             }
         }
     }
+    public static Role fromString(String a) {
+        if (a == null) return null;
+        try {
+            return Role.valueOf(a.trim());
+        } catch (IllegalArgumentException e) {
+            return null; // unknown string
+        }
+    }
+
 }

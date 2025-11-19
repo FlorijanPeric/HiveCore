@@ -1,6 +1,7 @@
 package upr.famnit.managers;
 
 import upr.famnit.authentication.Key;
+import upr.famnit.authentication.Role;
 import upr.famnit.util.Logger;
 
 import java.sql.*;
@@ -73,6 +74,31 @@ public class DatabaseManager {
             Logger.info("Keys table created or already exists.");
         }
     }
+
+    /**
+     * Creates the {@code AllowedModelsTable} table in the database if it does not already exist.
+     *
+     * <p>The {@code keys} table stores information about authentication keys, including their
+     * unique identifier, name, value, and associated role. This method ensures that the
+     * table structure is in place before any key-related operations are performed.</p>
+     *
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
+    /*public static synchronized void createAllowedModelsTable() throws SQLException {
+        String sql = "CREATE TABLE IF NOT EXISTS allowed_models (\n"
+                + "     key_value TEXT NOT NULL,\n"
+                + "     model_name TEXT NOT NULL,\n"
+                + "     PRIMARY KEY (key_value, model_name)\n"
+                + ");";
+
+        try (Connection conn = connect(); Statement statement = conn.createStatement()) {
+            statement.execute(sql);
+            Logger.info("Allowed models table created or already exists.");
+        }
+    }
+
+     */
+
 
     /**
      * Inserts a new {@link Key} into the {@code keys} table.
@@ -206,12 +232,79 @@ public class DatabaseManager {
             if (affectedRows > 0) {
                 Logger.info("Key deleted: " + value);
                 return true;
-            } else {
-                Logger.warn("No key found to delete with name: " + value);
-                return false;
+            }
+
+        }
+        return false;
+    }
+    public static synchronized boolean changeKeyNameByName(String oldName, String newName) throws SQLException {
+        String sql = "UPDATE keys SET name = ? WHERE name = ?";
+
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newName);
+            stmt.setString(2, oldName);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key name updated: " + oldName + " → " + newName);
+                return true;
             }
         }
+        return false;
     }
+    public static synchronized boolean changeKeyRoleByName(String name, Role newRole) throws SQLException {
+        String sql = "UPDATE keys SET role = ? WHERE name = ?";
+
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newRole.toString());
+            stmt.setString(2, name);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key role updated: " + name + " → " + newRole);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static synchronized boolean changeKeyRoleByAuth(String val, Role newRole) throws SQLException {
+        String sql = "UPDATE keys SET role = ? WHERE value = ?";
+
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newRole.name());
+            stmt.setString(2, val);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key role updated: " + val + " → " + newRole);
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    public static synchronized boolean changeKeyNameByAuth(String value, String newName) throws SQLException {
+        String sql = "UPDATE keys SET value = ? WHERE name = ?";
+
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newName);
+            stmt.setString(2, value);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Key name updated: " + value + " → " + newName);
+                return true;
+            }
+        }
+        return false;
+    }
+
 
 
 }

@@ -47,6 +47,9 @@ public class RoleUtil {
             case "admin" -> {
                 return Role.Admin;
             }
+            case "researcher"->{
+                return Role.Researcher;
+            }
             default -> {
                 return Role.Unknown;
             }

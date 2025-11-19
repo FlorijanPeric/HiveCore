@@ -12,8 +12,9 @@
     <list default="true" id="1f0778ec-972c-44d7-9355-8cf9d23e7ef0" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/../.env.sample" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Cargo.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/authentication/Role.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/authentication/Role.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/authentication/RoleUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/authentication/RoleUtil.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../LICENSE" beforeDir="false" />
@@ -212,7 +213,8 @@
       <workItem from="1763379501131" duration="5508000" />
       <workItem from="1763386947768" duration="522000" />
       <workItem from="1763456614328" duration="3884000" />
-      <workItem from="1763460510882" duration="5852000" />
+      <workItem from="1763460510882" duration="10771000" />
+      <workItem from="1763546851119" duration="5607000" />
     </task>
     <servers />
   </component>

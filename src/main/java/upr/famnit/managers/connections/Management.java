@@ -8,6 +8,7 @@ import upr.famnit.authentication.*;
 import upr.famnit.components.*;
 import upr.famnit.managers.DatabaseManager;
 import upr.famnit.managers.Overseer;
+import upr.famnit.util.LogLevel;
 import upr.famnit.util.Logger;
 import upr.famnit.util.StreamUtil;
 
@@ -118,7 +119,6 @@ public class Management implements Runnable {
     }
 
 
-
     /**
      * Handles requests to the "/queue" route, managing operations related to the request queue.
      *
@@ -144,7 +144,8 @@ public class Management implements Runnable {
         switch (clientRequest.getRequest().getMethod()) {
             case "GET" -> handleListKeysRequest();
             case "POST" -> handleInsertKeyRequest();
-            case "DELETE"->handleDeleteKeyRequest();
+            case "DELETE" -> handleDeleteKeyRequest();
+            case "UPDATE" -> handleKeyChangeReq();
             case null, default -> respond(ResponseFactory.NotFound());
         }
     }
@@ -209,7 +210,7 @@ public class Management implements Runnable {
         }
     }
 
-    private void handleWorkerCommandRoute() throws IOException  {
+    private void handleWorkerCommandRoute() throws IOException {
         switch (clientRequest.getRequest().getMethod()) {
             case "POST" -> handleWorkersCommandRequest();
             case null, default -> respond(ResponseFactory.NotFound());
@@ -355,7 +356,7 @@ public class Management implements Runnable {
         String authValue = jsonObject.get("auth").getAsString();
         Key requester = DatabaseManager.getKeyByValue(authValue);
 
-        if (requester == null || (requester.getRole())!=Role.Admin) {
+        if (requester == null || (requester.getRole()) != Role.Admin) {
             respond(ResponseFactory.MethodNotAllowed());
             return;
         }
@@ -367,40 +368,39 @@ public class Management implements Runnable {
 
 
         try {
-            if(!value.isEmpty()){
-                key=DatabaseManager.getKeyByValue(value);
-                deleteByValue=true;
+            if (!value.isEmpty()) {
+                key = DatabaseManager.getKeyByValue(value);
+                deleteByValue = true;
             }
-            if(key==null&&!name.isEmpty()) {
+            if (key == null && !name.isEmpty()) {
                 key = DatabaseManager.getKeyByName(name);
             }
 
             if (key != null) {
-                if(deleteByValue){
-                    boolean deleted=DatabaseManager.deleteKeyByValue(key.getValue());
-                }
-                else if (!deleteByValue&&key.getRole()!=Role.Admin) {
+                if (deleteByValue) {
+                    boolean deleted = DatabaseManager.deleteKeyByValue(key.getValue());
+                    Logger.log("Key deleted by value: " + key.getValue(), LogLevel.success);
+                    respond(ResponseFactory.Ok(value.getBytes()));
+                    return;
+                } else if (!deleteByValue && key.getRole() != Role.Admin) {
                     // Key exists and is NOT Admin → delete it
                     Logger.log(key.toString());
                     boolean deleted = DatabaseManager.deleteKeyByName(key.getName());
 
                     if (deleted) {
-                        System.out.println("Key deleted: " + key.getName());
-                    } else {
-                        System.out.println("Failed to delete key: " + key.getName());
+                        Logger.log("Key deleted: " + key.getName(), LogLevel.success);
+                        respond(ResponseFactory.Ok(name.getBytes()));
+                        return;
+
                     }
-                } else {
-                    // Admin key → do not delete
-                    System.out.println("Cannot delete Admin key: " + key.getName());
                 }
-            } else {
-                // Key does not exist
-                System.out.println("Key not found: " + name);
             }
+            respond(ResponseFactory.NotFound());
+            Logger.log("Key could not be deleted", LogLevel.error);
         } catch (SQLException e) {
             e.printStackTrace();
+            //respond(ResponseFactory.BadRequest());
         }
-        respond(ResponseFactory.Ok(name.getBytes()));
     }
 
 
@@ -435,6 +435,82 @@ public class Management implements Runnable {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         String body = gson.toJson(keys);
         respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private void handleKeyChangeReq() throws IOException, SQLException {
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+
+        JsonObject jsonObject = JsonParser.parseString(body).getAsJsonObject();
+
+        String authValue = jsonObject.get("auth").getAsString();
+        Key requester = DatabaseManager.getKeyByValue(authValue);
+        boolean update = false;
+
+        if (requester == null || (requester.getRole()) != Role.Admin) {
+            respond(ResponseFactory.MethodNotAllowed());
+            return;
+        }
+        String auth = jsonObject.has("value") ? jsonObject.get("value").getAsString().trim() : "";
+        String name = jsonObject.has("name") ? jsonObject.get("name").getAsString().trim() : "";
+        String newRole = jsonObject.has("roleNew") ? jsonObject.get("roleNew").getAsString().trim() : "";
+        String newName = jsonObject.has("newName") ? jsonObject.get("newName").getAsString().trim() : "";
+        boolean isnewName = !newName.isEmpty();
+        boolean hasNewRole = !newRole.isEmpty();
+        boolean bothChange = isnewName && hasNewRole;
+        try {
+
+
+            if (!auth.isEmpty() && name.isEmpty()) {
+
+                if (bothChange) {
+                    update = DatabaseManager.changeKeyRoleByAuth(auth, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    update = DatabaseManager.changeKeyNameByAuth(auth, newName);
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    Logger.log("Change of name and role succesfull", LogLevel.success);
+                    return;
+                } else if (isnewName) {
+                    update = DatabaseManager.changeKeyRoleByAuth(auth, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    return;
+
+                } else if (hasNewRole) {
+                    update = DatabaseManager.changeKeyRoleByAuth(auth, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    return;
+                }
+                respond(ResponseFactory.BadRequest());
+                Logger.log("Cant update", LogLevel.error);
+
+            } else if (!name.isEmpty() && auth.isEmpty()) {
+                if (bothChange) {
+                    update = DatabaseManager.changeKeyRoleByName(name, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    update = DatabaseManager.changeKeyNameByName(name, newName);
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    Logger.log("Change of name and role succesfull", LogLevel.success);
+                    return;
+                } else if (isnewName) {
+                    update = DatabaseManager.changeKeyRoleByName(name, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    return;
+
+                } else if (hasNewRole) {
+                    update = DatabaseManager.changeKeyRoleByName(name, Role.fromString(newRole));
+                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
+                    return;
+                }
+                respond(ResponseFactory.BadRequest());
+                Logger.log("Cant update", LogLevel.error);
+                return;
+
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+        }
+        if (!update){
+            respond(ResponseFactory.BadRequest());
+        }
     }
 
     /**
