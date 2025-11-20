@@ -209,6 +209,17 @@ public class DatabaseManager {
         return keys;
     }
 
+    /**
+     * Deletes a key from the {@code keys} table based on its name.
+     *
+     * <p>This method attempts to remove a key whose {@code name} matches the specified value.
+     * It is commonly used for administrative cleanup operations or key management tasks.</p>
+     *
+     * @param name the name of the key to delete
+     * @return {@code true} if a key with the given name was successfully deleted,
+     *         {@code false} if no matching key was found
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
 
     public static synchronized boolean deleteKeyByName(String name) throws SQLException {
         String sql = "DELETE FROM keys WHERE name = ?";
@@ -224,6 +235,18 @@ public class DatabaseManager {
             }
         }
     }
+
+    /**
+     * Deletes a key from the {@code keys} table based on its value.
+     *
+     * <p>This method removes a key whose {@code value} field matches the specified authentication
+     * token. It is typically used when invalidating or rotating API keys or credentials.</p>
+     *
+     * @param value the key value (token) to delete
+     * @return {@code true} if a key with the given value was deleted, {@code false} otherwise
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
+
     public static synchronized boolean deleteKeyByValue(String value) throws SQLException{
         String sql = "DELETE FROM keys WHERE value = ?";
         try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -237,6 +260,18 @@ public class DatabaseManager {
         }
         return false;
     }
+    /**
+     * Updates the name of a key in the {@code keys} table based on its current name.
+     *
+     * <p>This method locates a key using its existing {@code name} and updates it to the
+     * provided {@code newName}. It is useful for renaming keys in administrative settings.</p>
+     *
+     * @param oldName the current name of the key to update
+     * @param newName the new name to assign to the key
+     * @return {@code true} if the key name was successfully updated, {@code false} if no matching key was found
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
+
     public static synchronized boolean changeKeyNameByName(String oldName, String newName) throws SQLException {
         String sql = "UPDATE keys SET name = ? WHERE name = ?";
 
@@ -253,6 +288,18 @@ public class DatabaseManager {
         }
         return false;
     }
+    /**
+     * Updates the role of a key in the {@code keys} table based on its name.
+     *
+     * <p>This method changes the {@code role} associated with a key identified by its {@code name}.
+     * It is often used to modify permissions or access levels dynamically.</p>
+     *
+     * @param name the name of the key whose role should be updated
+     * @param newRole the new {@link Role} to assign to the key
+     * @return {@code true} if the role was successfully updated, {@code false} otherwise
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
+
     public static synchronized boolean changeKeyRoleByName(String name, Role newRole) throws SQLException {
         String sql = "UPDATE keys SET role = ? WHERE name = ?";
 
@@ -269,6 +316,18 @@ public class DatabaseManager {
         }
         return false;
     }
+    /**
+     * Updates the role of a key in the {@code keys} table based on its authentication value.
+     *
+     * <p>This method locates a key using its {@code value} (typically an authentication token)
+     * and assigns it a new {@link Role}. It is useful for adjusting access permissions tied
+     * directly to API keys or tokens.</p>
+     *
+     * @param val the authentication value of the key whose role should be changed
+     * @param newRole the new {@link Role} to assign
+     * @return {@code true} if the key's role was updated, {@code false} if no matching key was found
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
 
     public static synchronized boolean changeKeyRoleByAuth(String val, Role newRole) throws SQLException {
         String sql = "UPDATE keys SET role = ? WHERE value = ?";
@@ -287,6 +346,18 @@ public class DatabaseManager {
         return false;
     }
 
+    /**
+     * Updates the stored authentication value of a key based on its name.
+     *
+     * <p>This method identifies a key by its {@code name} and updates the {@code value}
+     * field (typically representing the authentication token). It is used when rotating
+     * or regenerating key values.</p>
+     *
+     * @param value the current name of the key to update
+     * @param newName the new authentication value to assign to the key
+     * @return {@code true} if the key value was successfully updated, {@code false} otherwise
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     */
 
     public static synchronized boolean changeKeyNameByAuth(String value, String newName) throws SQLException {
         String sql = "UPDATE keys SET value = ? WHERE name = ?";

@@ -205,6 +205,17 @@ public class Request {
     }
 
     /**
+     * Retrieves the head of the request.
+     *
+     * @return the request head as a String, or {@code null} if no head is present
+     */
+    public String getHeader(String name) {
+        if (name == null) return null;
+        return headers.get(name.toLowerCase());
+    }
+
+
+    /**
      * Logs the details of the request using the {@link Logger}.
      *
      * <p>The log entry includes the HTTP method, URI, protocol, headers, and body (if present).</p>

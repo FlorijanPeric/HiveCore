@@ -145,7 +145,7 @@ public class Management implements Runnable {
             case "GET" -> handleListKeysRequest();
             case "POST" -> handleInsertKeyRequest();
             case "DELETE" -> handleDeleteKeyRequest();
-            case "UPDATE" -> handleKeyChangeReq();
+            case "PATCH" -> handleKeyChangeReq();
             case null, default -> respond(ResponseFactory.NotFound());
         }
     }
@@ -437,23 +437,61 @@ public class Management implements Runnable {
         respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
     }
 
+    /**
+     * Handles a request to modify an existing key's properties such as its name or role.
+     *
+     * <p>This method processes an incoming JSON request from the client containing one or more
+     * modification instructions. Depending on the provided fields, the method can update a key's:
+     * <ul>
+     *     <li><strong>role</strong> — via {@code roleNew}</li>
+     *     <li><strong>name</strong> — via {@code newName}</li>
+     *     <li>or both</li>
+     * </ul>
+     *
+     * <p>The request must include an authentication value ({@code auth}) belonging to a key with
+     * {@link Role#Admin} privileges; otherwise, the operation is rejected.</p>
+     *
+     * <p>Valid update combinations:</p>
+     * <ul>
+     *     <li>Identify key by authentication value ({@code value})</li>
+     *     <li>Identify key by name ({@code name})</li>
+     *     <li>Optionally update role, name, or both</li>
+     * </ul>
+     *
+     * <p>Depending on the requested changes, this method delegates updates to the appropriate
+     * {@link DatabaseManager} methods, sends an HTTP response via {@link ResponseFactory},
+     * and logs the operation outcome.</p>
+     *
+     * @throws IOException  if reading the request body or writing the response fails
+     * @throws SQLException if a database operation triggered by the update fails
+     */
+
     private void handleKeyChangeReq() throws IOException, SQLException {
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            respond(ResponseFactory.BadRequest());
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
         String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
 
         JsonObject jsonObject = JsonParser.parseString(body).getAsJsonObject();
 
-        String authValue = jsonObject.get("auth").getAsString();
-        Key requester = DatabaseManager.getKeyByValue(authValue);
+        Key requester = DatabaseManager.getKeyByValue(token);
         boolean update = false;
 
         if (requester == null || (requester.getRole()) != Role.Admin) {
             respond(ResponseFactory.MethodNotAllowed());
             return;
         }
-        String auth = jsonObject.has("value") ? jsonObject.get("value").getAsString().trim() : "";
-        String name = jsonObject.has("name") ? jsonObject.get("name").getAsString().trim() : "";
-        String newRole = jsonObject.has("roleNew") ? jsonObject.get("roleNew").getAsString().trim() : "";
-        String newName = jsonObject.has("newName") ? jsonObject.get("newName").getAsString().trim() : "";
+        String auth = getJsonString(jsonObject, "value");
+        String name = getJsonString(jsonObject, "name");
+        String newRole = getJsonString(jsonObject, "roleNew");
+        String newName = getJsonString(jsonObject, "newName");
+
         boolean isnewName = !newName.isEmpty();
         boolean hasNewRole = !newRole.isEmpty();
         boolean bothChange = isnewName && hasNewRole;
@@ -464,13 +502,12 @@ public class Management implements Runnable {
 
                 if (bothChange) {
                     update = DatabaseManager.changeKeyRoleByAuth(auth, Role.fromString(newRole));
-                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     update = DatabaseManager.changeKeyNameByAuth(auth, newName);
                     respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     Logger.log("Change of name and role succesfull", LogLevel.success);
                     return;
                 } else if (isnewName) {
-                    update = DatabaseManager.changeKeyRoleByAuth(auth, Role.fromString(newRole));
+                    update = DatabaseManager.changeKeyNameByAuth(auth,newName);
                     respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     return;
 
@@ -485,13 +522,12 @@ public class Management implements Runnable {
             } else if (!name.isEmpty() && auth.isEmpty()) {
                 if (bothChange) {
                     update = DatabaseManager.changeKeyRoleByName(name, Role.fromString(newRole));
-                    respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     update = DatabaseManager.changeKeyNameByName(name, newName);
                     respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     Logger.log("Change of name and role succesfull", LogLevel.success);
                     return;
                 } else if (isnewName) {
-                    update = DatabaseManager.changeKeyRoleByName(name, Role.fromString(newRole));
+                    update = DatabaseManager.changeKeyNameByName(name,newName);
                     respond(ResponseFactory.Ok(body.getBytes(StandardCharsets.UTF_8)));
                     return;
 
@@ -550,4 +586,10 @@ public class Management implements Runnable {
     private void respond(Response response) throws IOException {
         StreamUtil.sendResponse(clientRequest.getClientSocket().getOutputStream(), response);
     }
+    private String getJsonString(JsonObject obj, String key) {
+        return obj.has(key) && !obj.get(key).isJsonNull()
+                ? obj.get(key).getAsString().trim()
+                : "";
+    }
+
 }
