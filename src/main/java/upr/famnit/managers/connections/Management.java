@@ -1,9 +1,6 @@
 package upr.famnit.managers.connections;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import upr.famnit.authentication.*;
 import upr.famnit.components.*;
 import upr.famnit.managers.DatabaseManager;
@@ -107,6 +104,7 @@ public class Management implements Runnable {
                 case "/worker/versions" -> handleWorkerHiveVersionRoute();
                 case "/worker/command" -> handleWorkerCommandRoute();
                 case "/queue" -> handleQueueRoute();
+                case "/block" -> handleWorkerBlockRoute();
                 case null, default -> respond(ResponseFactory.NotFound());
             }
 
@@ -195,6 +193,185 @@ public class Management implements Runnable {
         switch (clientRequest.getRequest().getMethod()) {
             case "GET" -> handleActiveWorkersTagsRequest();
             case null, default -> respond(ResponseFactory.NotFound());
+        }
+    }
+
+    private void handleWorkerBlockRoute() throws IOException, SQLException {
+        switch (clientRequest.getRequest().getMethod()){
+            case "GET" -> getAllBlock();
+            case "POST"-> insertModelBlock();
+            case "DELETE"-> deleteModelBlock();
+        }
+    }
+
+    private void deleteModelBlock() throws IOException, SQLException {
+
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        // Validate Authorization header
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            respond(ResponseFactory.BadRequest());
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+        if (requester == null) {
+            respond(ResponseFactory.MethodNotAllowed());
+            return;
+        }
+        if(!isAdminRequest()){
+            respond(ResponseFactory.BadRequest());
+            Logger.log("Only admin can Delete allowed models");
+            return;
+        }
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }try {
+            if(jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                Key targetKey=DatabaseManager.getKeyByValue(String.valueOf(targetKeyValue));
+                if(jsonObject.has("blockedModels")&&jsonObject.get("blockedModels").isJsonNull()){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("No models to delete from table",LogLevel.error);
+                    return;
+                }
+                String allowedModelStr=jsonObject.get("blockedModels").getAsString();
+                ArrayList<String> targetModelList = new ArrayList<>(Arrays.asList(allowedModelStr.split(",")));
+                for (String model:targetModelList){
+                    boolean allowed=DatabaseManager.canKeyUseModel(targetKeyValue,model);
+                    if(!allowed){
+                        DatabaseManager.blockModelForKey(targetKeyValue,model);
+                        continue;
+                    }
+                    Logger.log("Skipping this model, Model is already allowed",LogLevel.info);
+                }
+            }
+
+        } catch (SQLException | IOException e) {
+            e.printStackTrace();
+            Logger.log("There was something wrong with getting the data from the database");
+        }
+
+
+    }
+
+    private void insertModelBlock() throws IOException, SQLException {
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        // Validate Authorization header
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            respond(ResponseFactory.BadRequest());
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        // Get the key from the token
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+        if (requester == null) {
+            respond(ResponseFactory.MethodNotAllowed());
+            return;
+        }
+        if(!isAdminRequest()){
+            respond(ResponseFactory.BadRequest());
+            Logger.log("Only admin can insert allowed models");
+            return;
+        }
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }try {
+
+            if(jsonObject != null&&jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                //Key targetKey=DatabaseManager.getKeyByValue(targetKeyValue);
+                if(!jsonObject.has("blockedModels")&&jsonObject.get("blockedModels").isJsonNull()){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("No models to add to table",LogLevel.error);
+                    return;
+                }
+                String allowedModelStr=jsonObject.get("blockedModels").getAsString();
+                ArrayList<String> targetModelList = new ArrayList<>(Arrays.asList(allowedModelStr.split(",")));
+                for (String model:targetModelList){
+                  DatabaseManager.blockModelForKey(targetKeyValue,model);
+                }
+                JsonObject responseJson=new JsonObject();
+                responseJson.add("allowedModels",jsonObject);
+                byte[] responseBytes=responseJson.toString().getBytes(StandardCharsets.UTF_8);
+                respond(ResponseFactory.Ok(responseBytes));
+            }
+            respond(ResponseFactory.Ok());
+        } catch (SQLException e) {
+            e.printStackTrace();
+            Logger.log("There was something wrong with getting the data from the database");
+        }
+
+    }
+
+    private void getAllBlock() throws IOException,SQLException {
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        // Validate Authorization header
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            respond(ResponseFactory.BadRequest());
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        // Get the key from the token
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+        if (requester == null) {
+            respond(ResponseFactory.MethodNotAllowed());
+            return;
+        }
+        boolean isAdmin = isAdminRequest();
+        Key targetKey;
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }
+
+        try {
+            if(jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                if(!targetKeyValue.equals(token)&&requester.getRole()!=Role.Admin){
+                    respond(ResponseFactory.MethodNotAllowed());
+                    Logger.log("Unauthorized attempt to view another key's blocked models", LogLevel.warn);
+                    Logger.log("Admin can view all, others cannot");
+                    return;
+                }
+                //Check target key de se prepričam de obstaja
+                targetKey=DatabaseManager.getKeyByValue(targetKeyValue);
+                if (targetKey==null){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("Target key not found: "+targetKeyValue,LogLevel.error);
+                    return;
+                }
+                //Nucam ArrayList de lažje loopam skoz object pa tud za response generation
+                ArrayList<String>allowedModels=getAllowed(targetKeyValue);
+                JsonArray responseArray=new JsonArray();
+                for(String model:allowedModels){
+                    responseArray.add(model);
+                }
+                JsonObject responseJson=new JsonObject();
+                responseJson.add("blockedModels",responseArray);
+                byte[] responseBytes=responseJson.toString().getBytes(StandardCharsets.UTF_8);
+                respond(ResponseFactory.Ok(responseBytes));
+                Logger.log("Retrieved: "+allowedModels.size() + " blocked models for key " + requester.getName(), LogLevel.info);
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+            respond(ResponseFactory.InternalServerError());
         }
     }
 
@@ -591,5 +768,10 @@ public class Management implements Runnable {
                 ? obj.get(key).getAsString().trim()
                 : "";
     }
+
+    private ArrayList<String> getAllowed(String keyId) throws SQLException {
+        return DatabaseManager.getBlockedModelsForKey(keyId);
+    }
+
 
 }

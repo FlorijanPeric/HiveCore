@@ -13,7 +13,7 @@
       <change beforePath="$PROJECT_DIR$/../.env.sample" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Cargo.toml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/components/Request.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/components/Request.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/Main.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../LICENSE" beforeDir="false" />
@@ -214,7 +214,9 @@
       <workItem from="1763456614328" duration="3884000" />
       <workItem from="1763460510882" duration="10771000" />
       <workItem from="1763546851119" duration="5974000" />
-      <workItem from="1763655706437" duration="1609000" />
+      <workItem from="1763655706437" duration="1710000" />
+      <workItem from="1763908198767" duration="7795000" />
+      <workItem from="1764068603033" duration="6275000" />
     </task>
     <servers />
   </component>

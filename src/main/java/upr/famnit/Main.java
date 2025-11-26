@@ -16,6 +16,7 @@ public class Main {
         try {
             Config.init();
             DatabaseManager.createKeysTable();
+            DatabaseManager.createBlockedModelsTable();
 
             WorkerServer workerServer = new WorkerServer();
             ClientServer clientServer = new ClientServer();
