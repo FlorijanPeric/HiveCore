@@ -130,6 +130,43 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Creates the database table for storing allowed (whitelisted) models if it does not already exist.
+     *
+     * <p>This method performs the following actions:
+     * <ol>
+     *     <li>Defines a SQL statement to create the <code>allowed_models</code> table with columns:
+     *         <ul>
+     *             <li><code>key_value</code> (TEXT, NOT NULL)</li>
+     *             <li><code>model_name</code> (TEXT, NOT NULL)</li>
+     *         </ul>
+     *     </li>
+     *     <li>Sets a composite primary key on <code>(key_value, model_name)</code>.</li>
+     *     <li>Creates a foreign key constraint linking <code>key_value</code> to the <code>keys</code> table,
+     *         with cascading delete.</li>
+     *     <li>Executes the SQL statement using a new database connection.</li>
+     *     <li>Logs a message indicating that the table was successfully created.</li>
+     * </ol>
+     * </p>
+     *
+     * <p>This method is synchronized to prevent concurrent creation attempts from multiple threads.</p>
+     *
+     * @throws SQLException If a database access error occurs while creating the table.
+     */
+
+    public static synchronized void createWhiteListTable() throws SQLException{
+        String sql = "CREATE TABLE IF NOT EXISTS allowed_models (\n"
+                + "     key_value TEXT NOT NULL,\n"
+                + "     model_name TEXT NOT NULL,\n"
+                + "     PRIMARY KEY (key_value, model_name),\n"
+                + "     FOREIGN KEY (key_value) REFERENCES keys(value) ON DELETE CASCADE\n"
+                + ");";
+        try (Connection conn = connect(); Statement statement = conn.createStatement()){
+            statement.execute(sql);
+            Logger.info("Allowed models table created");
+        }
+    }
+
 
     /**
      * Inserts a new {@link Key} into the {@code keys} table.
@@ -308,12 +345,12 @@ public class DatabaseManager {
 
         try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, newName);
-            stmt.setString(2, oldName);
+            stmt.setString (1, newName);
+            stmt.setString (2, oldName);
 
             int affectedRows = stmt.executeUpdate();
             if (affectedRows > 0) {
-                Logger.info("Key name updated: " + oldName + " → " + newName);
+                Logger.info ("Key name updated: " + oldName + " → " + newName);
                 return true;
             }
         }
@@ -360,7 +397,7 @@ public class DatabaseManager {
      * @throws SQLException if a database access error occurs or the SQL statement is invalid
      */
 
-    public static synchronized boolean changeKeyRoleByAuth(String val, Role newRole) throws SQLException {
+    public static synchronized boolean changeKeyRoleByValue(String val, Role newRole) throws SQLException {
         String sql = "UPDATE keys SET role = ? WHERE value = ?";
 
         try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -390,7 +427,7 @@ public class DatabaseManager {
      * @throws SQLException if a database access error occurs or the SQL statement is invalid
      */
 
-    public static synchronized boolean changeKeyNameByAuth(String value, String newName) throws SQLException {
+    public static synchronized boolean changeKeyNameByValue(String value, String newName) throws SQLException {
         String sql = "UPDATE keys SET value = ? WHERE name = ?";
 
         try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -531,7 +568,7 @@ public class DatabaseManager {
      * @throws SQLException if a database access error occurs or the SQL statement is invalid
      * @throws IllegalStateException if the key does not exist
      */
-    public static synchronized boolean canKeyUseModel(String keyValue, String modelName) throws SQLException {
+    public static synchronized boolean canKeyUseModelBlack(String keyValue, String modelName) throws SQLException {
         // Check if the key exists
         String keyCheckSql = "SELECT value FROM keys WHERE value = ?";
         try (Connection conn = connect(); PreparedStatement checkStmt = conn.prepareStatement(keyCheckSql)) {
@@ -563,6 +600,60 @@ public class DatabaseManager {
             return allowed;
         }
     }
+
+    /**
+     * Checks whether a given key is allowed to use a specific model.
+     *
+     * <p>This method queries the {@code blocked_models} table to determine if the key
+     * has a restriction for the given model. If there is no entry in {@code blocked_models}
+     * for the key and model, the key is allowed to use it.</p>
+     *
+     * <p>Logging is performed at each stage:
+     * <ul>
+     *     <li>Info is logged whether the key is allowed or blocked for the model</li>
+     *     <li>Warnings are logged if the key does not exist</li>
+     * </ul></p>
+     *
+     * @param keyValue      the unique ID of the key in the {@code keys} table
+     * @param modelName  the name of the model to check
+     *
+     * @return {@code true} if the key can use the model, {@code false} if blocked
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     * @throws IllegalStateException if the key does not exist
+     */
+    public static synchronized boolean canKeyUseModelWhiteDataBase(String keyValue, String modelName) throws SQLException {
+        // Check if the key exists
+        String keyCheckSql = "SELECT value FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement checkStmt = conn.prepareStatement(keyCheckSql)) {
+            checkStmt.setString(1, keyValue);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (!rs.next()) {
+                Logger.warn("No key found with ID: " + keyValue);
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        // Check if the model is blocked
+        String sql = "SELECT COUNT(*) AS count FROM allowed_models WHERE key_value = ? AND model_name = ?";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, keyValue);
+            stmt.setString(2, modelName);
+            ResultSet rs = stmt.executeQuery();
+
+            rs.next();
+            boolean allowed = rs.getInt("count") == 0;
+
+            if (allowed) {
+                Logger.info("Key ID " + keyValue + " is allowed to use model '" + modelName + "'.");
+            } else {
+                Logger.info("Key ID " + keyValue + " is BLOCKED from using model '" + modelName + "'.");
+            }
+
+            return allowed;
+        }
+    }
+
     /**
      * Retrieves a list of models that the given key is allowed to use.
      *
@@ -610,5 +701,210 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Blocks access to a specific model for the given key in the {@code allowed_models} table.
+     *
+     * <p>This method first retrieves the key's role from the {@code keys} table. If the key
+     * has a role of {@code admin}, the operation is not allowed and an {@link IllegalStateException}
+     * is thrown. This ensures that admin keys always retain access to all models.</p>
+     *
+     * <p>If the key exists and is not an admin, a new entry is inserted into the
+     * {@code allowed_modles} table linking the {@code key_value} with the {@code model_name}.
+     * This effectively ensures the key is able to use this model.</p>
+     *
+     * <p>Logging is performed at each stage:
+     * <ul>
+     *     <li>Warnings are logged if the key does not exist or is an admin</li>
+     *     <li>Info is logged when a model is successfully blocked for a key</li>
+     * </ul></p>
+     *
+     * @param keyValue      the unique ID of the key in the {@code keys} table
+     * @param modelName  the name of the model to block for this key
+     *
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     * @throws IllegalStateException if attempting to block a model for an admin key
+     */
+
+    public static synchronized void allowModelForKey(String keyValue, String modelName) throws SQLException {
+        // First: check the user's role
+        String roleSql = "SELECT role FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement roleStmt = conn.prepareStatement(roleSql)) {
+            roleStmt.setString(1, keyValue);
+            ResultSet rs = roleStmt.executeQuery();
+
+            if (rs.next()) {
+                String role = rs.getString("role");
+
+                // Prevent blocking for admin users
+                if ("admin".equalsIgnoreCase(role)) {
+                    Logger.warn("Attempted to block a model for admin key ID: " + keyValue);
+                    throw new IllegalStateException("Admin keys cannot have models blocked.");
+                }
+            } else {
+                Logger.warn("No key found with value: " + keyValue);
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        // Insert into allowed_models table
+        String insertSql = "INSERT INTO allowed_models (key_value, model_name) VALUES (?, ?)";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(insertSql)) {
+            stmt.setString(1, keyValue);
+            stmt.setString(2, modelName);
+            stmt.executeUpdate();
+            Logger.info("Allowed model: '" + modelName + "' for key ID " + keyValue);
+        }
+        catch (SQLException e){
+            e.printStackTrace();
+            Logger.log("Something went wrong");
+        }
+    }
+
+
+    /**
+     * Removes an allowed model entry for the given key in the {@code allowed_models} table.
+     *
+     * <p>This method allows previously allowed models to be blocked for a specific key.
+     * It first checks if the key exists in the {@code keys} table. If the key does not exist,
+     * an {@link IllegalStateException} is thrown.</p>
+     *
+     * <p>Logging is performed at each stage:
+     * <ul>
+     *     <li>Warnings are logged if the key does not exist or the model was not blocked</li>
+     *     <li>Info is logged when a model is successfully unblocked for a key</li>
+     * </ul></p>
+     *
+     * @param keyValue      the unique ID of the key in the {@code keys} table
+     * @param modelName  the name of the model to unblock for this key
+     *
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     * @throws IllegalStateException if the key does not exist
+     */
+    public static synchronized void deleteFromWhiteList(String keyValue, String modelName) throws SQLException {
+        // Check if key exists
+        String keyCheckSql = "SELECT value FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement checkStmt = conn.prepareStatement(keyCheckSql)) {
+            checkStmt.setString(1, keyValue);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (!rs.next()) {
+                Logger.warn("No key found with ID: " + keyValue);
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        // Delete the blocked model
+        String deleteSql = "DELETE FROM allowed_models WHERE key_value = ? AND model_name = ?";
+        try (Connection conn = connect(); PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
+            deleteStmt.setString(1, keyValue);
+            deleteStmt.setString(2, modelName);
+
+            int affectedRows = deleteStmt.executeUpdate();
+            if (affectedRows > 0) {
+                Logger.info("Unblocked model '" + modelName + "' for key ID " + keyValue);
+            } else {
+                Logger.warn("Model '" + modelName + "' was not blocked for key ID " + keyValue);
+            }
+        }
+    }
+    /**
+     * Checks whether a given key is allowed to use a specific model.
+     *
+     * <p>This method queries the {@code allowed_models} table to determine if the key
+     * has a restriction for the given model. If there is an entry in {@code allowed_models}
+     * for the key and model, the key is allowed to use it.</p>
+     *
+     * <p>Logging is performed at each stage:
+     * <ul>
+     *     <li>Info is logged whether the key is allowed or blocked for the model</li>
+     *     <li>Warnings are logged if the key does not exist</li>
+     * </ul></p>
+     *
+     * @param keyValue      the unique ID of the key in the {@code keys} table
+     * @param modelName  the name of the model to check
+     *
+     * @return {@code true} if the key can use the model, {@code false} if blocked
+     * @throws SQLException if a database access error occurs or the SQL statement is invalid
+     * @throws IllegalStateException if the key does not exist
+     */
+    public static synchronized boolean canKeyUseModelWhite(String keyValue, String modelName) throws SQLException {
+        // Check if the key exists
+        String keyCheckSql = "SELECT value FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement checkStmt = conn.prepareStatement(keyCheckSql)) {
+            checkStmt.setString(1, keyValue);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (!rs.next()) {
+                Logger.warn("No key found with ID: " + keyValue);
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        // Check if the model is blocked
+        String sql = "SELECT COUNT(*) AS count FROM blocked_models WHERE key_value = ? AND model_name = ?";
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, keyValue);
+            stmt.setString(2, modelName);
+            ResultSet rs = stmt.executeQuery();
+
+            rs.next();
+            boolean allowed = rs.getInt("count") == 0;
+
+            if (allowed) {
+                Logger.info("Key ID " + keyValue + " is allowed to use model '" + modelName + "'.");
+            } else {
+                Logger.info("Key ID " + keyValue + " is BLOCKED from using model '" + modelName + "'.");
+            }
+
+            return allowed;
+        }
+    }
+
+    /**
+     * Retrieves a list of models that the given key is allowed to use.
+     *
+     * <p>This method queries all models from the {@code models} table and excludes any
+     * that are blocked for the given key in the {@code blocked_models} table. The result
+     * is a list of models the key can actually access.</p>
+     *
+     * <p>Logging is performed:
+     * <ul>
+     *     <li>Warnings if the key does not exist</li>
+     *     <li>Info showing how many models are allowed</li>
+     * </ul></p>
+     *
+     * @param keyValue the unique ID of the key in the {@code keys} table
+     * @return a {@link ArrayList} of model names that the key is allowed to use
+     * @throws SQLException if a database access error occurs
+     * @throws IllegalStateException if the key does not exist
+     */
+    public static synchronized ArrayList<String> getAllowedModelsForKey(String keyValue) throws SQLException {
+        // Check if the key exists
+        String keyCheckSql = "SELECT value FROM keys WHERE value = ?";
+        try (Connection conn = connect(); PreparedStatement checkStmt = conn.prepareStatement(keyCheckSql)) {
+            checkStmt.setString(1, keyValue);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (!rs.next()) {
+                Logger.warn("No key found with ID: " + keyValue);
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        String sql = "SELECT model_name FROM allowed_models WHERE key_value = ?";
+
+        try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, keyValue);
+            ResultSet rs = stmt.executeQuery();
+
+            ArrayList<String> allowedModels = new ArrayList<>();
+            while (rs.next()) {
+                allowedModels.add(rs.getString("model_name"));
+            }
+
+            Logger.info("Key ID " + keyValue + " is allowed to use " + allowedModels.size() + " models.");
+            return allowedModels;
+        }
+    }
 }
 

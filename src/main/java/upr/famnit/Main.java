@@ -7,6 +7,7 @@ import upr.famnit.network.WorkerServer;
 import upr.famnit.util.Config;
 import upr.famnit.util.Logger;
 
+import javax.xml.crypto.Data;
 import java.io.*;
 import java.sql.SQLException;
 
@@ -17,6 +18,7 @@ public class Main {
             Config.init();
             DatabaseManager.createKeysTable();
             DatabaseManager.createBlockedModelsTable();
+            DatabaseManager.createWhiteListTable();
 
             WorkerServer workerServer = new WorkerServer();
             ClientServer clientServer = new ClientServer();

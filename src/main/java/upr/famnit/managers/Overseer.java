@@ -330,7 +330,6 @@ public class Overseer extends Thread {
             if (workerRef == null) {
                 return ResponseFactory.NotFound();
             }
-
             Request r = null;
             switch (workerCommand.command) {
                 case "UPDATE" -> {
