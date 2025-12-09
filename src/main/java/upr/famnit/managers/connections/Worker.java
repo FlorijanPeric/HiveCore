@@ -357,6 +357,34 @@ public class Worker extends Thread {
         return null;
     }
 
+     /*
+     kinda threw out this shit
+    private ClientRequest defaultPolling(Request request) throws SQLException {
+        data.tagsTestAndSet(request.getUri());
+        String[] models = request.getUri().split(";");
+
+        for (String model : models) {
+            ClientRequest clientRequest = RequestQue.getTask(model, data.getNodeName());
+            if (clientRequest != null) {
+                String token = null;
+                Map<String, String> headers = clientRequest.getRequest().getHeaders();
+                String authHeader = headers.get("Authorization"); // or headers.get("authorization")
+
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    // Extract the token by removing "Bearer " and trimming whitespace
+                    token = authHeader.substring("Bearer ".length()).trim();
+                }
+                if(!isModelAllowedForKey(model,token)){
+                    Logger.log("Not allowed to use", LogLevel.error);
+                    continue;
+                }
+                return clientRequest;
+            }
+        }
+        return null;
+    }
+     */
+
     /**
      * Performs sequenced polling to optimize model sequencing and reduce model swaps.
      *
@@ -404,6 +432,8 @@ public class Worker extends Thread {
 
         return clientRequest;
     }
+
+
 
     /**
      * Checks whether the connection to the worker node is still open and valid.

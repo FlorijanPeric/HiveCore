@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 
 /**
  * The {@code ClientConnectionManager} class is responsible for handling incoming client connections.
@@ -77,20 +78,24 @@ public class Client implements Runnable {
             return;
         }
 
-        if (!RequestQue.addTask(cr)) {
-            Logger.error("Closing request due to invalid structure (" + clientSocket.getRemoteSocketAddress() + ")");
-            Response failedResponse = ResponseFactory.MethodNotAllowed();
-            try {
-                StreamUtil.sendResponse(cr.getClientSocket().getOutputStream(), failedResponse);
-            } catch (IOException e) {
-                Logger.error("Unable to respond to the client (" + clientSocket.getRemoteSocketAddress() + "): " + e.getMessage());
+        try {
+            if (!RequestQue.addTask(cr)) {
+                Logger.error("Closing request due to invalid structure (" + clientSocket.getRemoteSocketAddress() + ")");
+                Response failedResponse = ResponseFactory.MethodNotAllowed();
+                try {
+                    StreamUtil.sendResponse(cr.getClientSocket().getOutputStream(), failedResponse);
+                } catch (IOException e) {
+                    Logger.error("Unable to respond to the client (" + clientSocket.getRemoteSocketAddress() + "): " + e.getMessage());
+                }
+                try {
+                    cr.getClientSocket().close();
+                } catch (IOException e) {
+                    Logger.error("Unable to close connection to the client (" + clientSocket.getRemoteSocketAddress() + "): " + e.getMessage());
+                }
+                cr.getRequest().log();
             }
-            try {
-                cr.getClientSocket().close();
-            } catch (IOException e) {
-                Logger.error("Unable to close connection to the client (" + clientSocket.getRemoteSocketAddress() + "): " + e.getMessage());
-            }
-            cr.getRequest().log();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 

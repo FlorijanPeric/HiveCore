@@ -1,10 +1,14 @@
 package upr.famnit.components;
 
+import upr.famnit.managers.DatabaseManager;
+import upr.famnit.util.LogLevel;
 import upr.famnit.util.Logger;
 import upr.famnit.util.StreamUtil;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -94,11 +98,16 @@ public class RequestQue {
      * @param request the {@link ClientRequest} to be added
      * @return {@code true} if the task was successfully added; {@code false} otherwise
      */
-    public static boolean addTask(ClientRequest request) {
+    public static boolean addTask(ClientRequest request) throws SQLException {
         if (request.getRequest().getProtocol().equals("HIVE")) {
             return false;
         }
-
+        String model = extractModel(request);
+        String token = extractToken(request);
+        if(!isAllowedForModel(model,token)){
+            Logger.log("Model not allowed for the person", LogLevel.error);
+            return false;
+        }
         if (request.getRequest().getHeaders().containsKey("node")) {
             return addToQueByNode(request);
         } else {
@@ -236,5 +245,79 @@ public class RequestQue {
 
         return null;
     }
+    /**
+     * Extracts the model name from the JSON request body.
+     *
+     * <p>This expects the request body to contain a JSON key named {@code "model"}.
+     * If the key is missing or unreadable, {@code null} is returned.</p>
+     *
+     * @param request the {@link ClientRequest} whose model should be extracted
+     * @return the model name, or {@code null} if not found
+     */
+    public static String extractModel(ClientRequest request) {
+        return StreamUtil.getValueFromJSONBody("model", request.getRequest().getBody());
+    }
+
+    /**
+     * Extracts a Bearer token from the request's {@code Authorization} header.
+     *
+     * <p>The header must be in the format:</p>
+     * <pre>
+     * Authorization: Bearer &lt;token&gt;
+     * </pre>
+     *
+     * <p>If the header is missing, malformed, or does not begin with "Bearer ",
+     * {@code null} is returned.</p>
+     *
+     * @param request the {@link ClientRequest} containing the Authorization header
+     * @return the extracted token, or {@code null} if not present or invalid
+     */
+    public static String extractToken(ClientRequest request) {
+        String auth = request.getRequest().getHeaders().get("Authorization");
+        if (auth == null) return null;
+        if (!auth.startsWith("Bearer ")) return null;
+        return auth.substring("Bearer ".length()).trim();
+    }
+
+    /**
+     * Determines whether a given token is allowed to access a specific model.
+     *
+     * <p>The permission rules are as follows:</p>
+     *
+     * <ul>
+     *     <li><b>Blacklist overrides everything:</b><br>
+     *         If the model is in the token's blacklist, access is denied.</li>
+     *
+     *     <li><b>Whitelist restricts access only when it is non-empty:</b><br>
+     *         If the whitelist contains entries, then the model must appear in the
+     *         whitelist. If the whitelist is empty, all non-blacklisted models are allowed.</li>
+     *
+     *     <li><b>If the model is in neither whitelist nor blacklist:</b><br>
+     *         It is allowed as long as the whitelist is empty.</li>
+     * </ul>
+     *
+     * <p>This method fetches the allow- and block-lists from the database on each call.</p>
+     *
+     * @param model the model being requested
+     * @param token the client's authentication token
+     * @return {@code true} if access is permitted; {@code false} otherwise
+     * @throws SQLException if permission data cannot be retrieved
+     */
+    private static boolean isAllowedForModel(String model, String token) throws SQLException {
+        // TODO: call your real permission system
+        ArrayList<String> block=DatabaseManager.getBlockedModelsForKey(token);
+        ArrayList<String> allow=DatabaseManager.getAllowedModelsForKey(token);
+        boolean allowed=true;
+        if (block.contains(model)) {
+            return false;
+        }
+
+        if (!allow.isEmpty() && !allow.contains(model)) {
+            return false;
+        }
+
+        return true;
+    }
+
 
 }
