@@ -280,44 +280,54 @@ public class RequestQue {
     }
 
     /**
-     * Determines whether a given token is allowed to access a specific model.
+     * Determines whether a given key is allowed to access a specific model.
      *
-     * <p>The permission rules are as follows:</p>
+     * <p><b>Permission rules (evaluated in order of precedence):</b></p>
      *
-     * <ul>
-     *     <li><b>Blacklist overrides everything:</b><br>
-     *         If the model is in the token's blacklist, access is denied.</li>
+     * <ol>
+     *   <li><b>Global exclusivity (strongest rule):</b><br>
+     *       If the model is exclusive to a different key, access is denied.
+     *       If the model is not exclusive or is exclusive to this key, evaluation continues.</li>
      *
-     *     <li><b>Whitelist restricts access only when it is non-empty:</b><br>
-     *         If the whitelist contains entries, then the model must appear in the
-     *         whitelist. If the whitelist is empty, all non-blacklisted models are allowed.</li>
+     *   <li><b>Block list (hard deny):</b><br>
+     *       If the model appears in the key's block list, access is denied.</li>
      *
-     *     <li><b>If the model is in neither whitelist nor blacklist:</b><br>
-     *         It is allowed as long as the whitelist is empty.</li>
-     * </ul>
+     *   <li><b>Allow list (conditional whitelist):</b><br>
+     *       If the allow list is non-empty, the model must be present in it.
+     *       If the allow list is empty, all non-blocked models are permitted.</li>
+     * </ol>
      *
-     * <p>This method fetches the allow- and block-lists from the database on each call.</p>
+     * <p>This method retrieves exclusivity, allow-list, and block-list data
+     * from the database on each invocation.</p>
      *
-     * @param model the model being requested
-     * @param token the client's authentication token
+     * @param keyValue the key requesting access to the model
+     * @param modelName the model being requested
+     *
      * @return {@code true} if access is permitted; {@code false} otherwise
-     * @throws SQLException if permission data cannot be retrieved
+     *
+     * @throws SQLException if permission or exclusivity data cannot be retrieved
      */
-    private static boolean isAllowedForModel(String model, String token) throws SQLException {
-        // TODO: call your real permission system
-        ArrayList<String> block=DatabaseManager.getBlockedModelsForKey(token);
-        ArrayList<String> allow=DatabaseManager.getAllowedModelsForKey(token);
-        boolean allowed=true;
-        if (block.contains(model)) {
+    public static synchronized boolean isAllowedForModel(String keyValue, String modelName ) throws SQLException {
+        //Vičič special
+        String exclusiveOwner = DatabaseManager.getExclusiveOwnerForModel(modelName);
+        if (exclusiveOwner != null && !exclusiveOwner.equals(keyValue)) {
+            Logger.warn("Model '" + modelName + "' is exclusive to another key.");
+            return false;
+        }
+        //Black list
+        if (DatabaseManager.getBlockedModelsForKey(keyValue).contains(modelName)) {
+            Logger.info("Model '" + modelName + "' is blocked for key " + keyValue);
             return false;
         }
 
-        if (!allow.isEmpty() && !allow.contains(model)) {
+        //White list
+        ArrayList<String> allow = DatabaseManager.getAllowedModelsForKey(keyValue);
+        if (!allow.isEmpty() && !allow.contains(modelName)) {
+            Logger.info("Model '" + modelName + "' not in allow list for key " + keyValue);
             return false;
         }
 
         return true;
     }
-
 
 }

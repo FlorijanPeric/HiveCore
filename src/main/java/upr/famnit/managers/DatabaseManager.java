@@ -167,6 +167,24 @@ public class DatabaseManager {
         }
     }
 
+    public static synchronized void createExclusiveModelsTable() throws SQLException {
+        String sql = """
+        CREATE TABLE IF NOT EXISTS model_exclusive (
+            model_name TEXT PRIMARY KEY,
+            key_value  TEXT NOT NULL,
+            FOREIGN KEY (key_value) REFERENCES keys(value) ON DELETE CASCADE
+        );
+        """;
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute(sql);
+            Logger.info("Model exclusivity table created or already exists.");
+        }
+    }
+
+
 
     /**
      * Inserts a new {@link Key} into the {@code keys} table.
@@ -602,24 +620,27 @@ public class DatabaseManager {
     }
 
     /**
-     * Checks whether a given key is allowed to use a specific model.
+     * Determines whether a key is permitted to use a given model by consulting the database.
      *
-     * <p>This method queries the {@code blocked_models} table to determine if the key
-     * has a restriction for the given model. If there is no entry in {@code blocked_models}
-     * for the key and model, the key is allowed to use it.</p>
-     *
-     * <p>Logging is performed at each stage:
+     * <p>This method enforces the following policy:</p>
      * <ul>
-     *     <li>Info is logged whether the key is allowed or blocked for the model</li>
-     *     <li>Warnings are logged if the key does not exist</li>
-     * </ul></p>
+     *   <li>First, the key must exist in the {@code keys} table; if it does not, an
+     *       {@link IllegalStateException} is thrown.</li>
+     *   <li>Then the method queries {@code allowed_models} for a row matching
+     *       {@code (key_value, model_name)}.</li>
+     *   <li>If such a row <b>exists</b>, the key is treated as <b>blocked</b> for that model.</li>
+     *   <li>If no matching row exists, the key is treated as <b>allowed</b> for that model.</li>
+     * </ul>
      *
-     * @param keyValue      the unique ID of the key in the {@code keys} table
-     * @param modelName  the name of the model to check
+     * <p>Note: despite the table name {@code allowed_models}, the current logic uses it as a
+     * block list (presence = blocked, absence = allowed). If this is not intended,
+     * the SQL/boolean logic should be inverted or the table renamed to reflect its role.</p>
      *
-     * @return {@code true} if the key can use the model, {@code false} if blocked
-     * @throws SQLException if a database access error occurs or the SQL statement is invalid
-     * @throws IllegalStateException if the key does not exist
+     * @param keyValue  the key identifier from the {@code keys} table
+     * @param modelName the model name to check
+     * @return {@code true} if the key is allowed to use the model; {@code false} if it is blocked
+     * @throws SQLException if a database access error occurs or the SQL is invalid
+     * @throws IllegalStateException if the key does not exist in {@code keys}
      */
     public static synchronized boolean canKeyUseModelWhiteDataBase(String keyValue, String modelName) throws SQLException {
         // Check if the key exists
@@ -642,7 +663,7 @@ public class DatabaseManager {
             ResultSet rs = stmt.executeQuery();
 
             rs.next();
-            boolean allowed = rs.getInt("count") == 0;
+            boolean allowed = rs.getInt("count") > 0;
 
             if (allowed) {
                 Logger.info("Key ID " + keyValue + " is allowed to use model '" + modelName + "'.");
@@ -841,14 +862,14 @@ public class DatabaseManager {
         }
 
         // Check if the model is blocked
-        String sql = "SELECT COUNT(*) AS count FROM blocked_models WHERE key_value = ? AND model_name = ?";
+        String sql = "SELECT COUNT(*) AS count FROM allowed_models WHERE key_value = ? AND model_name = ?";
         try (Connection conn = connect(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, keyValue);
             stmt.setString(2, modelName);
             ResultSet rs = stmt.executeQuery();
 
             rs.next();
-            boolean allowed = rs.getInt("count") == 0;
+            boolean allowed = rs.getInt("count") > 0;
 
             if (allowed) {
                 Logger.info("Key ID " + keyValue + " is allowed to use model '" + modelName + "'.");
@@ -906,5 +927,234 @@ public class DatabaseManager {
             return allowedModels;
         }
     }
+
+    /**
+     * Assigns exclusive access of a model to a target key.
+     *
+     * <p><b>Authorization:</b> Only keys with the {@code admin} role may call this method.</p>
+     *
+     * <p><b>Behavior:</b>
+     * <ul>
+     *   <li>If the model is not currently exclusive, it becomes exclusive to {@code targetKey}.</li>
+     *   <li>If the model is already exclusive, ownership is reassigned to {@code targetKey}.</li>
+     *   <li>At most one key may own a model at any time.</li>
+     * </ul>
+     *
+     * <p>This operation is atomic and enforced at the database level.</p>
+     *
+     * @param requestingKey the admin key performing the operation
+     * @param targetKey the key that will gain exclusive access to the model
+     * @param modelName the model to be made exclusive
+     *
+     * @throws SecurityException if {@code requestingKey} is not an admin key
+     * @throws SQLException if a database error occurs
+     */
+    public static synchronized void setExclusiveModelForKey(String requestingKey, String targetKey, String modelName) throws SQLException {
+
+        if (!isAdminKey(requestingKey)) {
+            throw new SecurityException("Only admin keys can assign exclusive models.");
+        }
+
+        String sql = """
+        INSERT INTO model_exclusive (model_name, key_value)
+        VALUES (?, ?)
+        ON CONFLICT(model_name)
+        DO UPDATE SET key_value = excluded.key_value
+        """;
+
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, modelName);
+            stmt.setString(2, targetKey);
+            stmt.executeUpdate();
+        }
+    }
+
+    /**
+     * Removes exclusive access from a model.
+     *
+     * <p><b>Authorization:</b> Only keys with the {@code admin} role may call this method.</p>
+     *
+     * <p>If the model is not currently exclusive, this method performs no changes.</p>
+     *
+     * @param requestingKey the admin key performing the removal
+     * @param modelName the model whose exclusivity should be removed
+     *
+     * @throws SecurityException if {@code requestingKey} is not an admin key
+     * @throws SQLException if a database error occurs
+     */
+    public static synchronized void removeExclusiveModel(String requestingKey, String modelName) throws SQLException {
+
+        // 🔒 Authorization check
+        if (!isAdminKey(requestingKey)) {
+            throw new SecurityException("Only admin keys can remove model exclusivity.");
+        }
+
+        String sql = "DELETE FROM model_exclusive WHERE model_name = ?";
+
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, modelName);
+            int rows = stmt.executeUpdate();
+
+            if (rows > 0) {
+                Logger.info("Admin key " + requestingKey +
+                        " removed exclusivity for model " + modelName);
+            } else {
+                Logger.warn("Model '" + modelName + "' had no exclusivity set.");
+            }
+        }
+    }
+
+    /**
+     * Determines whether a key is the exclusive owner of a given model.
+     *
+     * <p>This method checks global exclusivity only.
+     * It does not consider allow or block lists.</p>
+     *
+     * <p>A model is considered usable by a key if:
+     * <ul>
+     *   <li>The model is exclusive and owned by the key, OR</li>
+     *   <li>The model is not exclusive at all</li>
+     * </ul>
+     *
+     * @param keyValue the key attempting to use the model
+     * @param modelName the model being checked
+     *
+     * @return {@code true} if the model is either not exclusive
+     *         or exclusive to {@code keyValue};
+     *         {@code false} if the model is exclusive to another key
+     *
+     * @throws IllegalStateException if the key does not exist
+     * @throws SQLException if a database error occurs
+     */
+    public static synchronized boolean canKeyUseExclusive(String keyValue, String modelName) throws SQLException {
+
+        // Verify key exists
+        String keyCheckSql = "SELECT 1 FROM keys WHERE value = ?";
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(keyCheckSql)) {
+
+            stmt.setString(1, keyValue);
+            ResultSet rs = stmt.executeQuery();
+
+            if (!rs.next()) {
+                throw new IllegalStateException("Key does not exist: " + keyValue);
+            }
+        }
+
+        // Check exclusivity ownership
+        String sql = "SELECT key_value FROM model_exclusive WHERE model_name = ?";
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, modelName);
+            ResultSet rs = stmt.executeQuery();
+
+            // Not exclusive → usable
+            if (!rs.next()) {
+                return true;
+            }
+
+            // Exclusive → must match owner
+            return keyValue.equals(rs.getString("key_value"));
+        }
+    }
+
+    /**
+     * Retrieves all models that are exclusively assigned to a given key.
+     *
+     * <p>This method does not perform authorization checks and is intended
+     * for administrative or informational use.</p>
+     *
+     * @param keyValue the key whose exclusive models should be returned
+     *
+     * @return a list of model names exclusively owned by the key;
+     *         the list is empty if none exist
+     *
+     * @throws SQLException if a database error occurs
+     */
+    public static synchronized ArrayList<String> getExclusiveModelsForKey(String keyValue)
+            throws SQLException {
+
+        String sql = "SELECT model_name FROM model_exclusive WHERE key_value = ?";
+
+        ArrayList<String> models = new ArrayList<>();
+
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, keyValue);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                models.add(rs.getString("model_name"));
+            }
+        }
+
+        return models;
+    }
+
+    /**
+     * Retrieves the key that owns exclusive access to a given model.
+     *
+     * <p>If the model is not exclusive, this method returns {@code null}.</p>
+     *
+     * @param modelName the model to check
+     *
+     * @return the key that owns the model exclusively, or {@code null}
+     *         if the model is not exclusive
+     *
+     * @throws SQLException if a database error occurs
+     */
+
+    public static synchronized String getExclusiveOwnerForModel(String modelName)
+            throws SQLException {
+
+        String sql = "SELECT key_value FROM model_exclusive WHERE model_name = ?";
+
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, modelName);
+            ResultSet rs = stmt.executeQuery();
+
+            return rs.next() ? rs.getString("key_value") : null;
+        }
+    }
+
+    /**
+     * Determines whether a key has administrative privileges.
+     *
+     * <p>A key is considered an admin if its role in the {@code keys} table
+     * is {@code "admin"} (case-insensitive).</p>
+     *
+     * @param keyValue the key to check
+     *
+     * @return {@code true} if the key has admin privileges,
+     *         {@code false} otherwise
+     *
+     * @throws SQLException if a database error occurs
+     */
+
+    public static boolean isAdminKey(String keyValue) throws SQLException {
+        String sql = "SELECT role FROM keys WHERE value = ?";
+
+        try (Connection conn = connect();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, keyValue);
+            ResultSet rs = stmt.executeQuery();
+
+            return rs.next() && "admin".equalsIgnoreCase(rs.getString("role"));
+        }
+    }
+
+
+
+
 }
+
 

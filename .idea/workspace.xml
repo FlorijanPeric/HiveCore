@@ -13,11 +13,11 @@
       <change beforePath="$PROJECT_DIR$/../.env.sample" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Cargo.toml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlite.db-shm" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlite.db-wal" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/Main.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/components/RequestQue.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/components/RequestQue.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/DatabaseManager.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Client.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Client.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Worker.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Worker.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/upr/famnit/managers/connections/Management.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../LICENSE" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../README.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../flow.svg" beforeDir="false" />
@@ -58,6 +58,9 @@
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
@@ -220,7 +223,8 @@
       <workItem from="1763908198767" duration="7795000" />
       <workItem from="1764068603033" duration="11396000" />
       <workItem from="1764343115184" duration="6187000" />
-      <workItem from="1764578001049" duration="11505000" />
+      <workItem from="1764578001049" duration="14199000" />
+      <workItem from="1765791622806" duration="5536000" />
     </task>
     <servers />
   </component>

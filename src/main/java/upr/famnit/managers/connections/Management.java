@@ -106,6 +106,7 @@ public class Management implements Runnable {
                 case "/queue" -> handleQueueRoute();
                 case "/block" -> handleWorkerBlockRoute();
                 case "/allow"->handleWorkerWhiteList();
+                case "/exclusive"->handleExclusiveList();
                 case null, default -> respond(ResponseFactory.NotFound());
             }
 
@@ -115,6 +116,284 @@ public class Management implements Runnable {
             throw new RuntimeException(e);
         }
         Logger.success("Management request finished");
+    }
+
+
+    /**
+     * Routes requests for the exclusive list endpoint based on HTTP method.
+     * <p>
+     * Supported methods:
+     * <ul>
+     *     <li>GET – Retrieves exclusive (blocked) models</li>
+     *     <li>POST – Adds models to the exclusive list</li>
+     *     <li>DELETE – Removes models from the exclusive list</li>
+     * </ul>
+     *
+     * @throws SQLException if a database access error occurs
+     * @throws IOException  if request or response I/O fails
+     */
+
+    private void handleExclusiveList() throws SQLException, IOException {
+        switch (clientRequest.getRequest().getMethod()){
+            case "GET" -> getExclusive();
+            case "POST"->addToExclusive();
+            case "DELETE"->deleteFromExclusive();
+        }
+    }
+
+
+
+    /**
+     * Handles GET requests for retrieving exclusive (blocked) models for a key.
+     * <p>
+     * Behavior:
+     * <ul>
+     *     <li>Extracts and validates the Authorization bearer token</li>
+     *     <li>Determines the requesting key and checks authorization</li>
+     *     <li>Allows admins to view blocked models for any key</li>
+     *     <li>Restricts non-admin users to viewing only their own blocked models</li>
+     *     <li>Returns a JSON array of blocked model names</li>
+     * </ul>
+     *
+     * Expected JSON body (optional):
+     * <pre>
+     * {
+     *   "targetKeyValue": "key-value"
+     * }
+     * </pre>
+     *
+     * Response JSON:
+     * <pre>
+     * {
+     *   "blockedModels": ["modelA", "modelB"]
+     * }
+     * </pre>
+     *
+     * @throws SQLException if database access fails
+     * @throws IOException  if request or response I/O fails
+     */
+    private void getExclusive() throws SQLException, IOException {
+
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        // Validate Authorization header
+
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        // Get the key from the token
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+        if ( !getAuthorization (authHeader, requester)){
+            return;
+        }
+
+        boolean isAdmin = isAdminRequest();
+        Key targetKey;
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }
+
+        try {
+            if(jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                if(!targetKeyValue.equals(token)&&requester.getRole()!=Role.Admin){
+                    respond(ResponseFactory.MethodNotAllowed());
+                    Logger.log("Unauthorized attempt to view another key's blocked models", LogLevel.warn);
+                    Logger.log("Admin can view all, others cannot");
+                    return;
+                }
+                //Check target key de se prepričam de obstaja
+                targetKey=DatabaseManager.getKeyByValue(targetKeyValue);
+                if (targetKey==null){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("Target key not found: "+targetKeyValue,LogLevel.error);
+                    return;
+                }
+                //Nucam ArrayList de lažje loopam skoz object pa tud za response generation
+                ArrayList<String>exclusiveModels=getExclusiveModels(targetKeyValue);
+                JsonArray responseArray=new JsonArray();
+                for(String model:exclusiveModels){
+                    responseArray.add(model);
+                }
+                JsonObject responseJson=new JsonObject();
+                responseJson.add("blockedModels",responseArray);
+                byte[] responseBytes=responseJson.toString().getBytes(StandardCharsets.UTF_8);
+                respond(ResponseFactory.Ok(responseBytes));
+                Logger.log("Retrieved: "+exclusiveModels.size() + " blocked models for key " + requester.getName(), LogLevel.info);
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+            respond(ResponseFactory.InternalServerError());
+        }
+
+    }
+
+
+    /**
+     * Handles POST requests for adding models to a key's exclusive list.
+     * <p>
+     * Behavior:
+     * <ul>
+     *     <li>Extracts and validates the Authorization bearer token</li>
+     *     <li>Checks requester authorization</li>
+     *     <li>Parses model names from the request body</li>
+     *     <li>Adds one or more models as exclusive for the target key</li>
+     * </ul>
+     *
+     * Expected JSON body:
+     * <pre>
+     * {
+     *   "targetKeyValue": "key-value",
+     *   "modelName": "modelA,modelB,modelC"
+     * }
+     * </pre>
+     *
+     * Response JSON:
+     * <pre>
+     * {
+     *   "allowedModels": { ...request body... }
+     * }
+     * </pre>
+     *
+     * @throws SQLException if database access fails
+     * @throws IOException  if request or response I/O fails
+     */
+
+    private void addToExclusive() throws SQLException,IOException{
+
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        // Get the key from the token
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+
+        if(!getAuthorization(authHeader,requester)){
+            return;
+        }
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }try {
+
+            if(jsonObject != null&&jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                //Key targetKey=DatabaseManager.getKeyByValue(targetKeyValue);
+                if(!jsonObject.has("modelName")&&jsonObject.get("modelName").isJsonNull()){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("No models to add to table",LogLevel.error);
+                    return;
+                }
+                String exclusiveModelStr=jsonObject.get("modelName").getAsString();
+                ArrayList<String> targetModelList = new ArrayList<>(Arrays.asList(exclusiveModelStr.split(",")));
+                for (String model:targetModelList){
+                    DatabaseManager.setExclusiveModelForKey(requester.getValue(),targetKeyValue,model);
+                }
+                JsonObject responseJson=new JsonObject();
+                responseJson.add("allowedModels",jsonObject);
+                byte[] responseBytes=responseJson.toString().getBytes(StandardCharsets.UTF_8);
+                respond(ResponseFactory.Ok(responseBytes));
+            }
+            respond(ResponseFactory.Ok());
+        } catch (SQLException e) {
+            e.printStackTrace();
+            Logger.log("There was something wrong with getting the data from the database");
+        }
+
+
+    }
+
+
+    /**
+     * Handles DELETE requests for removing models from a key's exclusive list.
+     * <p>
+     * Behavior:
+     * <ul>
+     *     <li>Extracts and validates the Authorization bearer token</li>
+     *     <li>Checks requester authorization</li>
+     *     <li>Verifies whether each model is currently exclusive</li>
+     *     <li>Removes exclusive restrictions for valid models</li>
+     *     <li>Skips models that are already allowed</li>
+     * </ul>
+     *
+     * Expected JSON body:
+     * <pre>
+     * {
+     *   "targetKeyValue": "key-value",
+     *   "modelName": "modelA,modelB"
+     * }
+     * </pre>
+     *
+     * Response JSON:
+     * <pre>
+     * {
+     *   "UnblockedModels": { ...request body... }
+     * }
+     * </pre>
+     *
+     * @throws SQLException if database access fails
+     * @throws IOException  if request or response I/O fails
+     */
+    private void deleteFromExclusive() throws  SQLException,IOException{
+
+
+        String authHeader = clientRequest.getRequest().getHeader("Authorization");
+
+        String token = authHeader.substring("Bearer ".length()).trim();
+
+        Key requester = DatabaseManager.getKeyByValue(token);
+
+        if(!getAuthorization(authHeader,requester)){
+            return;
+        }
+
+        String body = new String(clientRequest.getRequest().getBody(), StandardCharsets.UTF_8);
+        JsonObject jsonObject = null;
+        if (!body.isEmpty()) {
+            jsonObject = JsonParser.parseString(body).getAsJsonObject();
+        }try {
+            if(jsonObject.has("targetKeyValue")){
+                String targetKeyValue=jsonObject.get("targetKeyValue").getAsString();
+                Key targetKey=DatabaseManager.getKeyByValue(String.valueOf(targetKeyValue));
+                if(jsonObject.has("modelName")&&jsonObject.get("modelName").isJsonNull()){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("No models to delete from table",LogLevel.error);
+                    return;
+                }
+                boolean allGood=false;
+                String exclusiveModelStr=jsonObject.get("modelName").getAsString();
+                ArrayList<String> targetModelList = new ArrayList<>(Arrays.asList(exclusiveModelStr.split(",")));
+                for (String model:targetModelList){
+                    boolean exclusive=DatabaseManager.canKeyUseExclusive(targetKeyValue,model);
+                    if(exclusive){
+                        DatabaseManager.removeExclusiveModel(requester.getValue(),model);
+                        allGood=true;
+                        continue;
+                    }
+                    Logger.log("Skipping this model, Model is already allowed",LogLevel.info);
+                }
+                if(!allGood){
+                    respond(ResponseFactory.BadRequest());
+                    Logger.log("Something went wrong",LogLevel.error);
+                }
+                JsonObject responseJson=new JsonObject();
+                responseJson.add("UnblockedModels",jsonObject);
+                byte[] responseBytes=responseJson.toString().getBytes(StandardCharsets.UTF_8);
+                respond(ResponseFactory.Ok(responseBytes));
+            }
+
+        } catch (SQLException | IOException e) {
+            e.printStackTrace();
+            Logger.log("There was something wrong with getting the data from the database");
+        }
+
+
     }
 
 
@@ -1156,6 +1435,10 @@ public class Management implements Runnable {
      */
     private ArrayList<String> getAllowedWhite(String keyValue) throws SQLException {
         return DatabaseManager.getAllowedModelsForKey(keyValue);
+    }
+
+    private ArrayList<String> getExclusiveModels(String keyValue) throws SQLException {
+        return DatabaseManager.getExclusiveModelsForKey(keyValue);
     }
 
     /**

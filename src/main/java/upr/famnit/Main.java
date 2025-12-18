@@ -19,6 +19,7 @@ public class Main {
             DatabaseManager.createKeysTable();
             DatabaseManager.createBlockedModelsTable();
             DatabaseManager.createWhiteListTable();
+            DatabaseManager.createExclusiveModelsTable();
 
             WorkerServer workerServer = new WorkerServer();
             ClientServer clientServer = new ClientServer();

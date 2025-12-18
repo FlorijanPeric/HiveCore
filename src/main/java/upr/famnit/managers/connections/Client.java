@@ -1,6 +1,7 @@
 package upr.famnit.managers.connections;
 
 import upr.famnit.components.*;
+import upr.famnit.util.LogLevel;
 import upr.famnit.util.Logger;
 import upr.famnit.util.StreamUtil;
 
@@ -77,7 +78,6 @@ public class Client implements Runnable {
             Logger.error("Failed reading client request (" + clientSocket.getRemoteSocketAddress() + "): " + e.getMessage());
             return;
         }
-
         try {
             if (!RequestQue.addTask(cr)) {
                 Logger.error("Closing request due to invalid structure (" + clientSocket.getRemoteSocketAddress() + ")");
@@ -95,7 +95,8 @@ public class Client implements Runnable {
                 cr.getRequest().log();
             }
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            Logger.log("Rejecting request because the database failed from:" +clientSocket.getRemoteSocketAddress()+ " "+e.getMessage() );
+            rejectRequest(clientSocket);
         }
     }
 
@@ -115,4 +116,25 @@ public class Client implements Runnable {
             Logger.error("Could not send rejection response to socket: " + clientSocket.getInetAddress());
         }
     }
+
+    private void rejectInvalidRequest(ClientRequest cr) {
+        Logger.error("Closing request due to invalid structure (" +
+                cr.getClientSocket().getRemoteSocketAddress() + ")");
+        Response failed = ResponseFactory.MethodNotAllowed();
+
+        try {
+            StreamUtil.sendResponse(cr.getClientSocket().getOutputStream(), failed);
+        } catch (IOException e) {
+            Logger.error("Unable to respond to client: " + e.getMessage());
+        }
+
+        try {
+            cr.getClientSocket().close();
+        } catch (IOException e) {
+            Logger.error("Unable to close client socket: " + e.getMessage());
+        }
+
+        cr.getRequest().log();
+    }
+
 }
